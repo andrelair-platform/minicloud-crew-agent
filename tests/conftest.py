@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 from pydantic import BaseModel
 
+
 # BaseTool must be a real pydantic class, not a MagicMock.
 # Subclassing a MagicMock creates a metaclass conflict when starlette
 # imports pydantic BaseModel subclasses during TestClient setup.

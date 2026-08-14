@@ -128,8 +128,8 @@ jobs:
             --body "Automated image bump from CI." \
             --base main \
             --head "$BRANCH"
+          sleep 5
           gh pr merge "$BRANCH" \
             --repo andrelair-platform/minicloud-gitops \
-            --auto \
             --merge \
             --delete-branch

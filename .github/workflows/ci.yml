@@ -37,7 +37,9 @@ jobs:
 
   build-push:
     name: Build + push image
-    if: github.ref_name == 'main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      (github.ref_name == 'main' || github.ref_name == 'dev') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [lint, test-unit]
     runs-on: ubuntu-latest
     permissions:
@@ -46,6 +48,18 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set image tag and gitops overlay
+        id: tag
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          if [ "${{ github.ref_name }}" = "dev" ]; then
+            echo "sha=dev-${SHA}"      >> "$GITHUB_OUTPUT"
+            echo "overlay=dev"         >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${SHA}"          >> "$GITHUB_OUTPUT"
+            echo "overlay=prod"        >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: tailscale/github-action@v3
         with:
@@ -68,10 +82,6 @@ jobs:
             [registry."harbor.10.0.0.200.nip.io"]
               insecure = true
 
-      - name: Set image tag
-        id: tag
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
       - uses: docker/login-action@v3
         with:
           registry: harbor.10.0.0.200.nip.io
@@ -88,9 +98,11 @@ jobs:
           tags: harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
 
       - name: Install cosign
+        if: github.ref_name != 'dev'
         uses: sigstore/cosign-installer@v3
 
       - name: Sign image
+        if: github.ref_name != 'dev'
         run: |
           cosign sign --yes \
             harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}@${{ steps.build.outputs.digest }}
@@ -118,14 +130,14 @@ jobs:
           cd /tmp/gitops
           BRANCH="gitops/minicloud-crew-agent-${{ steps.tag.outputs.sha }}"
           git checkout -b "$BRANCH"
-          cd services/minicloud-crew-agent/minicloud-1/prod
+          cd services/minicloud-crew-agent/minicloud-1/${{ steps.tag.outputs.overlay }}
           kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
           git add kustomization.yaml
-          git commit -S -m "chore(minicloud-crew-agent): bump image to ${{ steps.tag.outputs.sha }}"
+          git commit -S -m "chore(minicloud-crew-agent): bump ${{ steps.tag.outputs.overlay }} image to ${{ steps.tag.outputs.sha }}"
           git push origin "$BRANCH"
           gh pr create \
             --repo andrelair-platform/minicloud-gitops \
-            --title "chore(minicloud-crew-agent): bump image to ${{ steps.tag.outputs.sha }}" \
+            --title "chore(minicloud-crew-agent): bump ${{ steps.tag.outputs.overlay }} image to ${{ steps.tag.outputs.sha }}" \
             --body "Automated image bump from CI." \
             --base main \
             --head "$BRANCH"

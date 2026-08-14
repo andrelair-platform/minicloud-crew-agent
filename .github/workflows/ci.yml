@@ -59,6 +59,7 @@ jobs:
           echo "${{ secrets.MINICLOUD_CA_CERT }}" \
             | sudo tee /usr/local/share/ca-certificates/minicloud-ca.crt
           sudo update-ca-certificates
+          sudo systemctl restart docker
 
       - uses: docker/setup-buildx-action@v3
 

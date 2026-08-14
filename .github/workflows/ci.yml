@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, staging, main]
+  pull_request:
+    branches: [staging, main]
+
+jobs:
+  lint:
+    name: L0 — lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements-test.txt
+      - run: ruff check app/ tests/
+      - run: ruff format --check app/ tests/
+      - run: mypy app/
+
+  test-unit:
+    name: L1 — unit tests
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install fastapi httpx pytest pytest-asyncio pytest-cov
+      - run: pytest tests/unit/ --cov=app --cov-report=term-missing --cov-fail-under=70
+
+  build-push:
+    name: Build + push image
+    if: github.ref_name == 'main' && github.event_name == 'push'
+    needs: [lint, test-unit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Trust minicloud CA
+        run: |
+          sudo mkdir -p /etc/docker/certs.d/harbor.10.0.0.200.nip.io
+          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
+            | sudo tee /etc/docker/certs.d/harbor.10.0.0.200.nip.io/ca.crt
+          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
+            | sudo tee /usr/local/share/ca-certificates/minicloud-ca.crt
+          sudo update-ca-certificates
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Set image tag
+        id: tag
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: harbor.10.0.0.200.nip.io
+          username: ${{ secrets.HARBOR_USER }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image
+        run: |
+          cosign sign --yes \
+            harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}@${{ steps.build.outputs.digest }}
+
+      - name: Update gitops overlay
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          git config --global user.name 'AndreLiar'
+          git config --global user.email 'andrelaurelyvan.kanmegnetabouguie@ynov.com'
+          git clone https://x-access-token:${GITOPS_TOKEN}@github.com/andrelair-platform/minicloud-gitops.git /tmp/gitops
+          cd /tmp/gitops
+          cd services/minicloud-crew-agent/minicloud-1/prod
+          kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
+          git add kustomization.yaml
+          git commit -m "chore(minicloud-crew-agent): bump image to ${{ steps.tag.outputs.sha }}"
+          git push origin main

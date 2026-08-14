@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -93,16 +94,42 @@ jobs:
           cosign sign --yes \
             harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}@${{ steps.build.outputs.digest }}
 
-      - name: Update gitops overlay
+      - name: Install kustomize
+        uses: imranismail/setup-kustomize@v3
+        with:
+          kustomize-version: "5.6.0"
+
+      - name: Import GPG key for signed gitops commit
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Update gitops overlay via PR
         env:
           GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
         run: |
           git config --global user.name 'AndreLiar'
           git config --global user.email 'andrelaurelyvan.kanmegnetabouguie@ynov.com'
           git clone https://x-access-token:${GITOPS_TOKEN}@github.com/andrelair-platform/minicloud-gitops.git /tmp/gitops
           cd /tmp/gitops
+          BRANCH="gitops/minicloud-crew-agent-${{ steps.tag.outputs.sha }}"
+          git checkout -b "$BRANCH"
           cd services/minicloud-crew-agent/minicloud-1/prod
           kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
           git add kustomization.yaml
-          git commit -m "chore(minicloud-crew-agent): bump image to ${{ steps.tag.outputs.sha }}"
-          git push origin main
+          git commit -S -m "chore(minicloud-crew-agent): bump image to ${{ steps.tag.outputs.sha }}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --repo andrelair-platform/minicloud-gitops \
+            --title "chore(minicloud-crew-agent): bump image to ${{ steps.tag.outputs.sha }}" \
+            --body "Automated image bump from CI." \
+            --base main \
+            --head "$BRANCH"
+          gh pr merge "$BRANCH" \
+            --repo andrelair-platform/minicloud-gitops \
+            --auto \
+            --merge \
+            --delete-branch

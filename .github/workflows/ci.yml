@@ -5,6 +5,7 @@ on:
     branches: [dev, staging, main]
   pull_request:
     branches: [staging, main]
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -36,7 +37,7 @@ jobs:
 
   build-push:
     name: Build + push image
-    if: github.ref_name == 'main' && github.event_name == 'push'
+    if: github.ref_name == 'main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [lint, test-unit]
     runs-on: ubuntu-latest
     permissions:

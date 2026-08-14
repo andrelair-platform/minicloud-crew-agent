@@ -1,4 +1,5 @@
 """L1 unit tests for the FastAPI application layer."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 def client():
     with patch("app.crew.run", new_callable=AsyncMock, return_value="crew answer") as mock:
         from app.main import app
+
         yield TestClient(app), mock
 
 

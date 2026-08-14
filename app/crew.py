@@ -5,6 +5,7 @@ Each request creates a fresh Crew with dynamically-scoped tasks.
 Agents are module-level singletons (stateless between requests).
 The crew runs via run_in_executor so FastAPI's event loop is never blocked.
 """
+
 import asyncio
 import logging
 import os
@@ -155,7 +156,5 @@ async def run(question: str) -> str:
     """Run the three-agent crew and return the compliance-validated answer."""
     crew, inputs = _build_crew(question)
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None, lambda: crew.kickoff(inputs=inputs)
-    )
+    result = await loop.run_in_executor(None, lambda: crew.kickoff(inputs=inputs))
     return str(result)

@@ -10,6 +10,7 @@ Architecture:
       ├── Analyst      (mistral-large, synthesis)
       └── Compliance   (mistral-large + rag, validation)
 """
+
 import json
 import logging
 import time
@@ -91,9 +92,7 @@ async def _sse_stream(request_id: str, model: str, content: str):
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": model,
-            "choices": [
-                {"index": 0, "delta": {"content": piece}, "finish_reason": None}
-            ],
+            "choices": [{"index": 0, "delta": {"content": piece}, "finish_reason": None}],
         }
         yield f"data: {json.dumps(data)}\n\n"
 

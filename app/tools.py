@@ -3,6 +3,7 @@ CrewAI tool definitions for the minicloud-crew-agent.
 BaseTool subclasses with synchronous _run methods — CrewAI calls these in a
 thread executor internally when running an async crew kickoff.
 """
+
 import logging
 import os
 
@@ -64,6 +65,7 @@ class WebSearchTool(BaseTool):
     def _run(self, query: str) -> str:
         try:
             from ddgs import DDGS
+
             results = list(DDGS().text(query, max_results=5))
             if not results:
                 return "No web results found for this query."

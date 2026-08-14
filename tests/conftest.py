@@ -1,4 +1,5 @@
 """Mock heavy AI/HTTP deps so tests run without a running cluster."""
+
 import sys
 from unittest.mock import MagicMock
 

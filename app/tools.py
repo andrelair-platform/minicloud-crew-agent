@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class _RagSearchInput(BaseModel):
     query: str = Field(description="Search query for the knowledge base")
-    collection: str = Field(default="", description="Optional collection UUID to restrict the search")
+    collection: str = Field(default="", description="Optional collection UUID to restrict search")
 
 
 class RagSearchTool(BaseTool):

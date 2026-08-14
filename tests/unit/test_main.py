@@ -1,6 +1,7 @@
 """L1 unit tests for the FastAPI application layer."""
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 

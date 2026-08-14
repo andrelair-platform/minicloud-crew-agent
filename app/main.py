@@ -6,9 +6,9 @@ as a drop-in chat model. Register as `model: deep-research-agent` in LiteLLM.
 
 Architecture:
   Client → LiteLLM proxy → minicloud-crew-agent:8081 → CrewAI Crew
-                                                        ├── Researcher   (mistral-small + rag + web)
-                                                        ├── Analyst      (mistral-large, synthesis)
-                                                        └── Compliance   (mistral-large + rag, validation)
+      ├── Researcher   (mistral-small + rag + web)
+      ├── Analyst      (mistral-large, synthesis)
+      └── Compliance   (mistral-large + rag, validation)
 """
 import json
 import logging

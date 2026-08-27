@@ -152,7 +152,12 @@ jobs:
           BRANCH="gitops/minicloud-crew-agent-${{ steps.tag.outputs.sha }}"
           git checkout -b "$BRANCH"
           cd services/minicloud-crew-agent/minicloud-1/${{ steps.tag.outputs.overlay }}
-          kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
+          # Hybrid registry: prod pulls from ghcr (set newName+newTag); dev stays Harbor.
+          if [ "${{ steps.tag.outputs.overlay }}" = "prod" ]; then
+            kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent=ghcr.io/andrelair-platform/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
+          else
+            kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
+          fi
           git add kustomization.yaml
           git commit -S -m "chore(minicloud-crew-agent): bump ${{ steps.tag.outputs.overlay }} image to ${{ steps.tag.outputs.sha }}"
           git push origin "$BRANCH"

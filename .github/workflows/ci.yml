@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [dev, staging, main]
+    branches: [main]
   pull_request:
-    branches: [staging, main]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -128,47 +128,8 @@ jobs:
           cosign sign --yes \
             ghcr.io/andrelair-platform/minicloud-crew-agent@${{ steps.build.outputs.digest }}
 
-      - name: Install kustomize
-        uses: imranismail/setup-kustomize@v3
-        with:
-          kustomize-version: "5.6.0"
-
-      - name: Import GPG key for signed gitops commit
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-
-      - name: Update gitops overlay via PR
-        env:
-          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
-        run: |
-          git config --global user.name 'AndreLiar'
-          git config --global user.email 'andrelaurelyvan.kanmegnetabouguie@ynov.com'
-          git clone https://x-access-token:${GITOPS_TOKEN}@github.com/andrelair-platform/minicloud-gitops.git /tmp/gitops
-          cd /tmp/gitops
-          BRANCH="gitops/minicloud-crew-agent-${{ steps.tag.outputs.sha }}"
-          git checkout -b "$BRANCH"
-          cd services/minicloud-crew-agent/minicloud-1/${{ steps.tag.outputs.overlay }}
-          # Hybrid registry: prod pulls from ghcr (set newName+newTag); dev stays Harbor.
-          if [ "${{ steps.tag.outputs.overlay }}" = "prod" ]; then
-            kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent=ghcr.io/andrelair-platform/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
-          else
-            kustomize edit set image harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}
-          fi
-          git add kustomization.yaml
-          git commit -S -m "chore(minicloud-crew-agent): bump ${{ steps.tag.outputs.overlay }} image to ${{ steps.tag.outputs.sha }}"
-          git push origin "$BRANCH"
-          gh pr create \
-            --repo andrelair-platform/minicloud-gitops \
-            --title "chore(minicloud-crew-agent): bump ${{ steps.tag.outputs.overlay }} image to ${{ steps.tag.outputs.sha }}" \
-            --body "Automated image bump from CI." \
-            --base main \
-            --head "$BRANCH"
-          sleep 5
-          gh pr merge "$BRANCH" \
-            --repo andrelair-platform/minicloud-gitops \
-            --merge \
-            --delete-branch
+      # ── Promotion + dev verification handled by KARGO, not CI ──────────────
+      # Build ends at a verified, immutable artifact (dual-push Harbor + ghcr, cosign, SBOM).
+      # Kargo auto-promotes the main Freight to the dev Stage + runs dev verification
+      # (services/minicloud-crew-agent/kargo/analysis-dev-smoke.yaml, Variant C); prod is a manual
+      # CODEOWNERS-gated Kargo promotion. No CI gitops bump.

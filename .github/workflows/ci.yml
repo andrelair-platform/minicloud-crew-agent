@@ -54,49 +54,21 @@ jobs:
         id: tag
         run: |
           SHA=$(git rev-parse --short HEAD)
-          HARBOR=harbor.10.0.0.200.nip.io/library/minicloud-crew-agent
           GHCR=ghcr.io/andrelair-platform/minicloud-crew-agent
           if [ "${{ github.ref_name }}" = "dev" ]; then
             echo "sha=dev-${SHA}"      >> "$GITHUB_OUTPUT"
             echo "overlay=dev"         >> "$GITHUB_OUTPUT"
-            TAGS="${HARBOR}:dev-${SHA}"
+            TAGS="${GHCR}:dev-${SHA}"
           else
             echo "sha=${SHA}"          >> "$GITHUB_OUTPUT"
             echo "overlay=prod"        >> "$GITHUB_OUTPUT"
-            # Hybrid registry: prod (main) -> Harbor AND ghcr.io (off local disk).
-            TAGS="${HARBOR}:${SHA}"$'\n'"${GHCR}:${SHA}"
+            TAGS="${GHCR}:${SHA}"
           fi
           { echo "tags<<EOF"; echo "${TAGS}"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
-      - uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
-      - name: Trust minicloud CA
-        run: |
-          sudo mkdir -p /etc/docker/certs.d/harbor.10.0.0.200.nip.io
-          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
-            | sudo tee /etc/docker/certs.d/harbor.10.0.0.200.nip.io/ca.crt
-          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
-            | sudo tee /usr/local/share/ca-certificates/minicloud-ca.crt
-          sudo update-ca-certificates
-
       - uses: docker/setup-buildx-action@v4
-        with:
-          buildkitd-config-inline: |
-            [registry."harbor.10.0.0.200.nip.io"]
-              insecure = true
 
-      - uses: docker/login-action@v3
-        with:
-          registry: harbor.10.0.0.200.nip.io
-          username: ${{ secrets.HARBOR_USER }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
-
-      - name: Login to GHCR (prod images)
-        if: github.ref_name == 'main'
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -116,14 +88,8 @@ jobs:
         if: github.ref_name != 'dev'
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign image
+      - name: Sign ghcr image
         if: github.ref_name != 'dev'
-        run: |
-          cosign sign --yes \
-            harbor.10.0.0.200.nip.io/library/minicloud-crew-agent:${{ steps.tag.outputs.sha }}@${{ steps.build.outputs.digest }}
-
-      - name: Sign ghcr image (prod)
-        if: github.ref_name == 'main'
         run: |
           cosign sign --yes \
             ghcr.io/andrelair-platform/minicloud-crew-agent@${{ steps.build.outputs.digest }}
